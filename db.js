@@ -1,6 +1,7 @@
 import Sequelize from 'sequelize';
 import Faker from 'faker';
 import _ from 'lodash';
+import { series } from './index';
 
 const Conn = new Sequelize('email_series', 'devinchasanoff', 'password', {
   dialect: 'postgres',
@@ -16,15 +17,20 @@ const User = Conn.define('user', {
 exports.populate = () => {
   if (process.env.NODE_ENV !== 'test') {
     Conn.sync({ force: true }).then(() => {
-      _.times(50, () => {
+      _.times(series.length, i => {
         User.create({ 
           email: Faker.internet.email().toLowerCase(),
           firstName: Faker.name.firstName(),
-          lastName: Faker.name.lastName() 
+          lastName: Faker.name.lastName(),
+          createdAt: new Date(new Date() - (series[i].days * 24 * 60 * 60 * 1000))
         });
       }); 
     });
   }
+}
+
+function randomInt(min, max) {
+  return Math.round((Math.random() * (max - min) + min));
 }
 
 export default Conn;

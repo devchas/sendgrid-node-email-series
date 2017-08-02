@@ -3,9 +3,11 @@ import db, { populate } from './db';
 var sg = require('sendgrid')(process.env.SG_API_KEY);
 
 const populateDb = false;
+const send = true;
+
 if (populateDb) { populate(); }
 
-const series = [
+export const series = [
   { days: 0,  templateID: 'db6d9991-5136-4fba-82ef-6c5e98649caf' }, 
   { days: 1,  templateID: 'ef3d3c2c-f6f1-4057-8389-f82e071c7f5c' }, 
   { days: 5,  templateID: '3fb326bd-ae78-40d0-9622-0fdf1cc0d235' }, 
@@ -13,7 +15,6 @@ const series = [
   { days: 30, templateID: '3b9986aa-ee99-4f18-9693-d6ac29064f11' }
 ];
 
-const send = true;
 if (send) { main(); }
 
 function main() {
@@ -44,10 +45,8 @@ function getUsers(daysAgo) {
         $lt: endDate
       }
     }}).then(users => {
-      var userList = [];
-
-      users.forEach(({ email, firstName, lastName }) => {
-        userList.push({ email, firstName, lastName });
+      var userList = users.map(({ email, firstName, lastName }) => {
+        return { email, firstName, lastName };
       });
 
       resolve(userList);
@@ -93,9 +92,8 @@ function prepareEmail(recipients, templateID) {
 // Would need to adjust if more than 1000 recipients in any email
 function preparePersonalizations(recipients) {
   const subject = "Your Awesome Subject Line";
-  var personalizations = [];
   
-  recipients.forEach(({ email, firstName, lastName }) => {
+  return recipients.map(({ email, firstName, lastName }) => {
     const name = `${firstName} ${lastName}`;
 
     var personalization = {
@@ -103,8 +101,7 @@ function preparePersonalizations(recipients) {
       subject,
       substitutions: { FIRST_NAME: firstName }
     }
-    personalizations.push(personalization);
+    
+    return personalization;
   });
-
-  return personalizations;
 }
