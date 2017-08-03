@@ -147,12 +147,6 @@ async.util.setimmediate@0.5.2:
   version "0.5.2"
   resolved "https://registry.yarnpkg.com/async.util.setimmediate/-/async.util.setimmediate-0.5.2.tgz#2812ebabf2a58027758d4bc7793d1ccfaf10255f"
 
-async@^2.5.0:
-  version "2.5.0"
-  resolved "https://registry.yarnpkg.com/async/-/async-2.5.0.tgz#843190fd6b7357a0b9e1c956edddd5ec8462b54d"
-  dependencies:
-    lodash "^4.14.0"
-
 asynckit@^0.4.0:
   version "0.4.0"
   resolved "https://registry.yarnpkg.com/asynckit/-/asynckit-0.4.0.tgz#c79ed97f7f34cb8f2ba1bc9790bcc366474b4b79"
@@ -1194,7 +1188,7 @@ lodash.chunk@^4.2.0:
   version "4.2.0"
   resolved "https://registry.yarnpkg.com/lodash.chunk/-/lodash.chunk-4.2.0.tgz#66e5ce1f76ed27b4303d8c6512e8d1216e8106bc"
 
-lodash@^4.14.0, lodash@^4.17.1, lodash@^4.17.4, lodash@^4.2.0:
+lodash@^4.17.1, lodash@^4.17.4, lodash@^4.2.0:
   version "4.17.4"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.4.tgz#78203a4d1c328ae1d86dca6460e369b57f4055ae"
 

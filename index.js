@@ -1,6 +1,5 @@
 import db, { populate } from './db';
 import _ from 'lodash';
-import async from 'async';
 
 var sg = require('sendgrid')(process.env.SG_API_KEY);
 
@@ -34,8 +33,9 @@ export const series = [
 
 if (send) { main(); }
 
+// Loops through each series of emails
 function main(i = 0) {
-  executeSeries(series[i], null, () => {
+  executeSeries(series[i], 0, () => {
     i++;
     if (i == series.length) {
       process.exit();
@@ -45,8 +45,9 @@ function main(i = 0) {
   });
 }
 
-function executeSeries(series, counter, callback) {
-  var i = (!counter) ? 0 : counter;
+// Retreives users and send emails for a given series of emails,
+// such as 'welcome series' or 'first purchase series'
+function executeSeries(series, i = 0, callback) {
   const { days, templateIDs } = series.seriesData[i];
 
   getUsers(days, series.seriesName).then(users => {
@@ -61,7 +62,7 @@ function executeSeries(series, counter, callback) {
   });
 }
 
-// Retreives all users that were created a certain number of days ago
+// Retreives all users from the DB that were created a given number of days ago
 function getUsers(daysAgo, seriesName) {
   return new Promise((resolve, reject) => {
     const today = new Date();
@@ -74,7 +75,7 @@ function getUsers(daysAgo, seriesName) {
       seriesName
     }}).then(emailSeries => {
       if (emailSeries.length > 0) {
-        prepareUsers(emailSeries, null, userList => {
+        prepareUsers(emailSeries, 0, userList => {
           resolve(userList);
         });
       } else {
@@ -84,8 +85,8 @@ function getUsers(daysAgo, seriesName) {
   });
 }
 
-function prepareUsers(emailSeries, counter, callback) {
-  var i = (!counter) ? 0 : counter;
+// Returns structured array of users based on the email series returned from the DB
+function prepareUsers(emailSeries, i = 0, callback) {
   var userList = [];
   var email = emailSeries[i];
 
@@ -103,6 +104,7 @@ function prepareUsers(emailSeries, counter, callback) {
   });
 }
 
+// Sends the appropriate emails to the list of users that should receive them
 function sendEmails(users, templateIDs, callback) {
   if (users.length == 0) { return callback(); }
 
@@ -137,6 +139,7 @@ function sendEmails(users, templateIDs, callback) {
   });
 }
 
+// Prepares the body of the email per SendGrid documentation
 function prepareEmail(recipients, templateID) {
   const senderEmail = 'sender@example.com';
   const senderName = 'Sender Name';
@@ -150,6 +153,7 @@ function prepareEmail(recipients, templateID) {
   return emailBody;
 }
 
+// Prepare personalizations part of parameter for SendGrid API call
 // Would need to adjust if more than 1000 recipients in any email
 function preparePersonalizations(recipients) {
   const subject = "Your Awesome Subject Line";
