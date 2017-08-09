@@ -1,81 +1,99 @@
 import db, { populate } from './db';
 import _ from 'lodash';
+import util from 'util';
 
 var sg = require('sendgrid')(process.env.SG_API_KEY);
 
 const populateDb = false;
+const runMain = true;
 const send = true;
 
 if (populateDb) { populate(); }
 
-export const series = [
-  {
-    seriesName: 'welcome',
-    seriesData: [
-      { days: 0,  templateIDs: ['db6d9991-5136-4fba-82ef-6c5e98649caf'] }, 
-      { days: 1,  templateIDs: ['ef3d3c2c-f6f1-4057-8389-f82e071c7f5c', 'fa7cd0e1-331f-4c14-8db2-24cd2de62b84'] },
-      { days: 5,  templateIDs: ['3fb326bd-ae78-40d0-9622-0fdf1cc0d235'] }, 
-      { days: 15, templateIDs: ['bd9955e3-19eb-4bb0-a669-dc42a79cec6f'] }, 
-      { days: 30, templateIDs: ['3b9986aa-ee99-4f18-9693-d6ac29064f11'] }
-    ]
-  },
-  {
-    seriesName: 'firstPurchase',
-    seriesData: [
-      { days: 0,  templateIDs: ['db6d9991-5136-4fba-82ef-6c5e98649caf'] }, 
-      { days: 1,  templateIDs: ['ef3d3c2c-f6f1-4057-8389-f82e071c7f5c', 'fa7cd0e1-331f-4c14-8db2-24cd2de62b84'] },
-      { days: 5,  templateIDs: ['3fb326bd-ae78-40d0-9622-0fdf1cc0d235'] }, 
-      { days: 15, templateIDs: ['bd9955e3-19eb-4bb0-a669-dc42a79cec6f'] }, 
-      { days: 30, templateIDs: ['3b9986aa-ee99-4f18-9693-d6ac29064f11'] }
-    ]    
-  }
-];
+if (runMain) { main(); }
 
-if (send) { main(); }
-
-// Loops through each series of emails
-function main(i = 0) {
-  executeSeries(series[i], 0, () => {
-    i++;
-    if (i == series.length) {
+// Get and loops through each series of emails
+function main() {
+  getEmailSeries().then(series => {
+    executeSeries(series, 0, () => {
       process.exit();
-    } else {
-      main(i);
-    }
+    });
   });
 }
 
-// Retreives users and send emails for a given series of emails,
-// such as 'welcome series' or 'first purchase series'
-function executeSeries(series, i = 0, callback) {
-  const { days, templateIDs } = series.seriesData[i];
+// Retreive emails series and related data from DB
+function getEmailSeries() {
+  return new Promise((resolve, reject) => {
+    db.models.emailSeries.findAll().then(series => {
+      prepareSeries(series, 0, [], outputSeries => {
+        resolve(outputSeries);
+      });
+    });
+  });
+}
 
-  getUsers(days, series.seriesName).then(users => {
-    sendEmails(users, templateIDs, () => {
+// Convert series into an array of structured data
+function prepareSeries(series, i=0, outputSeries=[], callback) {
+  if (i == series.length) { return callback(outputSeries); }
+
+  series[i].getStages().then(stages => {
+    const seriesWithStages = {
+      id: series[i].id,
+      label: series[i].label,
+      stages: prepareStages(stages)
+    };
+
+    outputSeries.push(seriesWithStages);
+    i++;
+    prepareSeries(series, i, outputSeries, callback);
+  });
+}
+
+// Convert stages of series into structured data
+function prepareStages(stages) {
+  return stages.map(({ label, daysToSend, sgTemplateID }) => {
+    return { label, daysToSend, sgTemplateID };
+  });
+}
+
+// Loop through series to send appropriate emails
+function executeSeries(series, i=0, callback) {
+  if (i == series.length) { return callback(); }
+
+  executeStages(series[i].id, series[i].stages, 0, () => {
+    i++;
+    executeSeries(series, i, callback);
+  });
+}
+
+// Loop through stages to send appropriate emails
+function executeStages(seriesID, stages, i=0, callback) {
+  if (i == stages.length) { return callback(); }
+
+  const { daysToSend, sgTemplateID } = stages[i];
+
+  getUsers(daysToSend, seriesID).then(users => {
+    sendEmails(users, sgTemplateID, () => {
       i++;
-      if (i == series.seriesData.length) {
-        callback();
-      } else {
-        executeSeries(series, i, callback);
-      } 
+      executeStages(seriesID, stages, i, callback);
     });
   });
 }
 
 // Retreives all users from the DB that were created a given number of days ago
-function getUsers(daysAgo, seriesName) {
+function getUsers(daysAgo, seriesID) {
   return new Promise((resolve, reject) => {
     const today = new Date();
     const endDate = new Date(today - (daysAgo * 24 * 60 * 60 * 1000));
     const startDate = new Date(endDate - (24 * 60 * 60 * 1000));
 
-    db.models.emailSeries.findAll({ where: {
-      createdAt: { $gt: startDate, $lt: endDate },
+    db.models.userSeries.findAll({ where: {
+      startDate: { $gt: startDate, $lt: endDate },
       stopEmails: false,
-      seriesName
-    }}).then(emailSeries => {
-      if (emailSeries.length > 0) {
-        prepareUsers(emailSeries, 0, userList => {
+      emailSeryId: seriesID
+    }}).then(userSeries => {
+      if (userSeries.length > 0) {
+        prepareUsers(userSeries, 0, [], userList => {
           resolve(userList);
         });
       } else {
@@ -86,57 +104,44 @@ function getUsers(daysAgo, seriesName) {
 }
 
 // Returns structured array of users based on the email series returned from the DB
-function prepareUsers(emailSeries, i = 0, callback) {
-  var userList = [];
-  var email = emailSeries[i];
+function prepareUsers(userSeries, i=0, userList=[], callback) {
+  if (i == userSeries.length) { return callback(userList); }
 
-  const templateVersion = email.templateVersion;
+  const userId = userSeries[i].userId;
 
-  email.getUser().then(({ email, firstName, lastName }) => {
-    userList.push({ email, firstName, lastName, templateVersion });
+  db.models.user.findById(userId).then(({ email, firstName, lastName }) => {
+    userList.push({ email, firstName, lastName });
     i++;
-
-    if (i == emailSeries.length) {
-      callback(userList);
-    } else {
-      prepareUsers(emailSeries, i, callback);
-    }
+    prepareUsers(userSeries, i, userList, callback);
   });
 }
 
 // Sends the appropriate emails to the list of users that should receive them
-function sendEmails(users, templateIDs, callback) {
+function sendEmails(users, templateID, callback) {
   if (users.length == 0) { return callback(); }
 
-  var templateCount = 0;
-  var numberOfTemplates = templateIDs.length;
-
-  templateIDs.forEach((templateID, index) => {
-    const usersToReceiveGivenTemplate = _.filter(users, { 'templateVersion': index });
-    if (usersToReceiveGivenTemplate.length > 0) {
-      var body = prepareEmail(usersToReceiveGivenTemplate, templateIDs[index]);
-      var request = sg.emptyRequest({
-        method: 'POST',
-        path: '/v3/mail/send',
-        body
-      });
-
-      sg.API(request, function (error, response) {
-        templateCount++;
-        if (error) {
-          console.log('Error response received');
-          if (templateCount == numberOfTemplates) { return callback(); }
-        }
-        console.log(response.statusCode);
-        console.log(response.body);
-        console.log(response.headers);
-        if (templateCount == numberOfTemplates) { return callback(); }
-      });
-    } else {
-      templateCount++;
-      if (templateCount == numberOfTemplates) { return callback(); }
-    }
+  var body = prepareEmail(users, templateID);
+  var request = sg.emptyRequest({
+    method: 'POST',
+    path: '/v3/mail/send',
+    body
   });
+
+  if (send) {
+    sg.API(request, function (error, response) {
+      if (error) {
+        console.log('Error response received', error.response.body.errors[0]);
+        return callback();
+      }
+      console.log(response.statusCode);
+      console.log(response.body);
+      console.log(response.headers);
+      return callback();
+    });
+  } else {
+    console.log(request);
+    return callback();
+  }
 }
 
 // Prepares the body of the email per SendGrid documentation
