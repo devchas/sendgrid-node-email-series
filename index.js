@@ -123,21 +123,30 @@ function sendEmails(users, templateID, callback) {
   if (users.length == 0) { return callback(); }
 
   const msg = prepareEmail(users, templateID);
-  sgMail.send(msg, (error, response) => {
-    if (error) {
-      console.log('Error', error.toString());
-    }
+
+  if (send) {
+    sgMail.send(msg, (error, response) => {
+      if (error) {
+        console.log('Error response received', error.toString());
+      }
+      return callback();
+    });
+  } else {
     return callback();
-  });
+  }
 }
 
 // Prepares the body of the email per SendGrid documentation
 function prepareEmail(recipients, templateID) {
+  const senderEmail = 'sender@example.com';
+  const senderName = 'Sender Name';
+
   var emailBody = {
     personalizations: preparePersonalizations(recipients),
-    from: { email: 'sender@example.com', name: 'Sender Name' },
+    from: { email: senderEmail, name: senderName },
     template_id: templateID
   }
+
   return emailBody;
 }
 
@@ -146,10 +155,12 @@ function prepareEmail(recipients, templateID) {
 function preparePersonalizations(recipients) {
   return recipients.map(({ email, firstName, lastName }) => {
     const name = `${firstName} ${lastName}`;
+
     var personalization = {
       to: [{ email, name }],
       substitutions: { firstName }
     }
+    
     return personalization;
   });
 }
