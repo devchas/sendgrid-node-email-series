@@ -2,7 +2,9 @@ import db, { populate } from './db';
 import _ from 'lodash';
 import util from 'util';
 
-var sg = require('sendgrid')(process.env.SG_API_KEY);
+import sgMail from '@sendgrid/mail';
+sgMail.setApiKey(process.env.SG_API_KEY);
+sgMail.setSubstitutionWrappers('{{', '}}'); // Configure the substitution tag wrappers globally
 
 const populateDb = false;
 const runMain = true;
@@ -120,58 +122,34 @@ function prepareUsers(userSeries, i=0, userList=[], callback) {
 function sendEmails(users, templateID, callback) {
   if (users.length == 0) { return callback(); }
 
-  var body = prepareEmail(users, templateID);
-  var request = sg.emptyRequest({
-    method: 'POST',
-    path: '/v3/mail/send',
-    body
-  });
-
-  if (send) {
-    sg.API(request, function (error, response) {
-      if (error) {
-        console.log('Error response received', error.response.body.errors[0]);
-        return callback();
-      }
-      console.log(response.statusCode);
-      console.log(response.body);
-      console.log(response.headers);
-      return callback();
-    });
-  } else {
-    console.log(request);
+  const msg = prepareEmail(users, templateID);
+  sgMail.send(msg, (error, response) => {
+    if (error) {
+      console.log('Error', error.toString());
+    }
     return callback();
-  }
+  });
 }
 
 // Prepares the body of the email per SendGrid documentation
 function prepareEmail(recipients, templateID) {
-  const senderEmail = 'sender@example.com';
-  const senderName = 'Sender Name';
-
   var emailBody = {
     personalizations: preparePersonalizations(recipients),
-    from: { email: senderEmail, name: senderName },
+    from: { email: 'sender@example.com', name: 'Sender Name' },
     template_id: templateID
   }
-
   return emailBody;
 }
 
 // Prepare personalizations part of parameter for SendGrid API call
 // Would need to adjust if more than 1000 recipients in any email
 function preparePersonalizations(recipients) {
-  const subject = "Your Awesome Subject Line";
-  
   return recipients.map(({ email, firstName, lastName }) => {
     const name = `${firstName} ${lastName}`;
-
     var personalization = {
       to: [{ email, name }],
-      subject,
-      substitutions: { FIRST_NAME: firstName }
+      substitutions: { firstName }
     }
-    
     return personalization;
   });
 }
