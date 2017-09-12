@@ -64,9 +64,9 @@ function createUser(numUsers, i=0, userList=[], callback) {
   let email;
 
   if (i < numUsers / 2) {
-    email = 'devchas@gmail.com';
+    email = 'user1@example.com';
   } else {
-    email = 'devin.chasanoff@sendgrid.com';
+    email = 'user2@example.com';
   }
 
   User.create({
