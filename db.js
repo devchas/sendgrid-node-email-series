@@ -63,14 +63,14 @@ function createUser(numUsers, i=0, userList=[], callback) {
 
   let email;
 
-  if (i < numUsers / 2) {
-    email = 'user1@example.com';
-  } else {
-    email = 'user2@example.com';
-  }
+  // if (i < numUsers / 2) {
+  //   email = 'user1@example.com';
+  // } else {
+  //   email = 'user2@example.com';
+  // }
 
   User.create({
-    email,
+    email: 'example@email.com',
     firstName: Faker.name.firstName(),
     lastName: Faker.name.lastName()  
   }).then(user => {

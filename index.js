@@ -1,7 +1,4 @@
 import db, { populate } from './db';
-import _ from 'lodash';
-import util from 'util';
-
 import sgMail from '@sendgrid/mail';
 sgMail.setApiKey(process.env.SG_API_KEY);
 sgMail.setSubstitutionWrappers('{{', '}}'); // Configure the substitution tag wrappers globally
@@ -11,34 +8,27 @@ const runMain = true;
 const send = true;
 
 if (populateDb) { populate(); }
-
 if (runMain) { main(); }
 
 // Get and loops through each series of emails
-function main() {
-  getEmailSeries().then(series => {
-    executeSeries(series, 0, () => {
-      process.exit();
-    });
-  });
+async function main() {
+  const series = await getEmailSeries();
+  await executeSeries(series);
+  process.exit();    
 }
 
 // Retreive emails series and related data from DB
-function getEmailSeries() {
-  return new Promise((resolve, reject) => {
-    db.models.emailSeries.findAll().then(series => {
-      prepareSeries(series, 0, [], outputSeries => {
-        resolve(outputSeries);
-      });
-    });
-  });
+async function getEmailSeries() {
+  const series = await db.models.emailSeries.findAll();
+  return await prepareSeries(series);
 }
 
 // Convert series into an array of structured data
-function prepareSeries(series, i=0, outputSeries=[], callback) {
-  if (i == series.length) { return callback(outputSeries); }
+async function prepareSeries(series) {
+  var outputSeries = []
 
-  series[i].getStages().then(stages => {
+  for (var i = 0; i < series.length; i++) {
+    const stages = await series[i].getStages()
     const seriesWithStages = {
       id: series[i].id,
       label: series[i].label,
@@ -46,9 +36,9 @@ function prepareSeries(series, i=0, outputSeries=[], callback) {
     };
 
     outputSeries.push(seriesWithStages);
-    i++;
-    prepareSeries(series, i, outputSeries, callback);
-  });
+  }
+
+  return outputSeries;
 }
 
 // Convert stages of series into structured data
@@ -59,95 +49,64 @@ function prepareStages(stages) {
 }
 
 // Loop through series to send appropriate emails
-function executeSeries(series, i=0, callback) {
-  if (i == series.length) { return callback(); }
-
-  executeStages(series[i].id, series[i].stages, 0, () => {
-    i++;
-    executeSeries(series, i, callback);
-  });
+async function executeSeries(series) {
+  for (var i = 0; i < series.length; i++) {
+    await executeStages(series[i].id, series[i].stages)
+  }
 }
 
 // Loop through stages to send appropriate emails
-function executeStages(seriesID, stages, i=0, callback) {
-  if (i == stages.length) { return callback(); }
-
-  const { daysToSend, sgTemplateID } = stages[i];
-
-  getUsers(daysToSend, seriesID).then(users => {
-    sendEmails(users, sgTemplateID, () => {
-      i++;
-      executeStages(seriesID, stages, i, callback);
-    });
-  });
+async function executeStages(seriesID, stages) {
+  for (var i = 0; i < stages.length; i++) {
+    const { daysToSend, sgTemplateID } = stages[i];
+    var users = await getUsers(daysToSend, seriesID)
+    await sendEmails(users, sgTemplateID)
+  }
 }
 
 // Retreives all users from the DB that were created a given number of days ago
-function getUsers(daysAgo, seriesID) {
-  return new Promise((resolve, reject) => {
-    const today = new Date();
-    const endDate = new Date(today - (daysAgo * 24 * 60 * 60 * 1000));
-    const startDate = new Date(endDate - (24 * 60 * 60 * 1000));
+async function getUsers(daysAgo, seriesID) {
+  const dailyMilliseconds = 24 * 60 * 60 * 1000;
+  const today = new Date();
+  const endDate = new Date(today - (daysAgo * dailyMilliseconds));
+  const startDate = new Date(endDate - dailyMilliseconds);
 
-    db.models.userSeries.findAll({ where: {
-      startDate: { $gt: startDate, $lt: endDate },
-      stopEmails: false,
-      emailSeryId: seriesID
-    }}).then(userSeries => {
-      if (userSeries.length > 0) {
-        prepareUsers(userSeries, 0, [], userList => {
-          resolve(userList);
-        });
-      } else {
-        resolve([]);
-      }
-    });
-  });
+  const userSeries = await db.models.userSeries.findAll({ where: {
+    startDate: { $gt: startDate, $lt: endDate },
+    stopEmails: false,
+    emailSeryId: seriesID
+  }});
+
+  var userList = [];
+  if (userSeries.length > 0) { userList = await prepareUsers(userSeries); }
+  return userList;
 }
 
 // Returns structured array of users based on the email series returned from the DB
-function prepareUsers(userSeries, i=0, userList=[], callback) {
-  if (i == userSeries.length) { return callback(userList); }
-
-  const userId = userSeries[i].userId;
-
-  db.models.user.findById(userId).then(({ email, firstName, lastName }) => {
+async function prepareUsers(userSeries) {
+  var userList = [];
+  
+  for (var i = 0; i < userSeries.length; i++) {
+    const userId = userSeries[i].userId;
+    const { email, firstName, lastName } = await db.models.user.findById(userId);
     userList.push({ email, firstName, lastName });
-    i++;
-    prepareUsers(userSeries, i, userList, callback);
-  });
+  }
+
+  return userList;
 }
 
 // Sends the appropriate emails to the list of users that should receive them
-function sendEmails(users, templateID, callback) {
-  if (users.length == 0) { return callback(); }
-
-  const msg = prepareEmail(users, templateID);
-
-  if (send) {
-    sgMail.send(msg, (error, response) => {
-      if (error) {
-        console.log('Error response received', error.toString());
-      }
-      return callback();
-    });
-  } else {
-    return callback();
-  }
+async function sendEmails(users, templateID) {
+  if (users.length == 0 || !send) { return; }
+  await sgMail.send(prepareEmail(users, templateID));
 }
 
 // Prepares the body of the email per SendGrid documentation
-function prepareEmail(recipients, templateID) {
-  const senderEmail = 'sender@example.com';
-  const senderName = 'Sender Name';
-
-  var emailBody = {
-    personalizations: preparePersonalizations(recipients),
-    from: { email: senderEmail, name: senderName },
-    template_id: templateID
-  }
-
-  return emailBody;
+function prepareEmail(recipients, template_id) {
+  const email = 'sender@example.com';
+  const name = 'Sender Name';
+  const personalizations = preparePersonalizations(recipients);
+  return { personalizations, from: { email, name }, template_id }
 }
 
 // Prepare personalizations part of parameter for SendGrid API call
