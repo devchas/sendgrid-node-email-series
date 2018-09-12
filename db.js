@@ -3,11 +3,11 @@ import Faker from 'faker';
 import _ from 'lodash';
 
 const seriesInput = [
-  { label: 'Email 1', daysToSend: 0,  sgTemplateID: 'db6d9991-5136-4fba-82ef-6c5e98649caf' }, 
+  { label: 'Email 1', daysToSend: 0,  sgTemplateID: 'db6d9991-5136-4fba-82ef-6c5e98649caf' },
   { label: 'Email 2', daysToSend: 1,  sgTemplateID: 'ef3d3c2c-f6f1-4057-8389-f82e071c7f5c' },
-  { label: 'Email 3', daysToSend: 5,  sgTemplateID: '3fb326bd-ae78-40d0-9622-0fdf1cc0d235' }, 
-  { label: 'Email 4', daysToSend: 15, sgTemplateID: 'bd9955e3-19eb-4bb0-a669-dc42a79cec6f' }, 
-  { label: 'Email 5', daysToSend: 30, sgTemplateID: '3b9986aa-ee99-4f18-9693-d6ac29064f11' }    
+  { label: 'Email 3', daysToSend: 5,  sgTemplateID: '3fb326bd-ae78-40d0-9622-0fdf1cc0d235' },
+  { label: 'Email 4', daysToSend: 15, sgTemplateID: 'bd9955e3-19eb-4bb0-a669-dc42a79cec6f' },
+  { label: 'Email 5', daysToSend: 30, sgTemplateID: '3b9986aa-ee99-4f18-9693-d6ac29064f11' }
 ];
 
 
@@ -53,7 +53,7 @@ exports.populate = () => {
             process.exit();
           });
         });
-      }); 
+      });
     });
   });
 }
@@ -63,16 +63,16 @@ function createUser(numUsers, i=0, userList=[], callback) {
 
   let email;
 
-  // if (i < numUsers / 2) {
-  //   email = 'user1@example.com';
-  // } else {
-  //   email = 'user2@example.com';
-  // }
+  if (i < numUsers / 2) {
+    email = 'devchas@gmail.com';
+  } else {
+    email = 'devin.chasanoff@sendgrid.com';
+  }
 
   User.create({
-    email: 'example@email.com',
+    email,
     firstName: Faker.name.firstName(),
-    lastName: Faker.name.lastName()  
+    lastName: Faker.name.lastName()
   }).then(user => {
     userList.push(user);
     i++;
@@ -99,7 +99,7 @@ function createStages(numStages, emailSeryId, i=0, callback) {
   const seriesWithSeriesId = Object.assign({}, seriesInput[i], { emailSeryId });
 
   SeriesStage.create(seriesWithSeriesId).then(stage => {
-    i++;  
+    i++;
     createStages(numStages, emailSeryId, i, callback);
   });
 }
